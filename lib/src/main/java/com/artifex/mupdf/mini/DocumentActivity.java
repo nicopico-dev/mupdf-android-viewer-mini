@@ -89,6 +89,7 @@ public class DocumentActivity extends Activity
 	protected View actionBar;
 	protected TextView titleLabel;
 	protected View searchButton;
+	protected View shareButton;
 	protected View searchBar;
 	protected EditText searchText;
 	protected View searchCloseButton;
@@ -286,6 +287,13 @@ public class DocumentActivity extends Activity
 		searchButton.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View v) {
 				showSearch();
+			}
+		});
+
+		shareButton = findViewById(R.id.share_button);
+		shareButton.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				shareDocument();
 			}
 		});
 		searchText = (EditText)findViewById(R.id.search_text);
@@ -837,6 +845,19 @@ public class DocumentActivity extends Activity
 		searchBar.setVisibility(View.GONE);
 		hideKeyboard();
 		resetSearch();
+	}
+
+	protected void shareDocument() {
+		Intent shareIntent = new Intent(Intent.ACTION_SEND);
+		shareIntent.setType(mimetype);
+		shareIntent.putExtra(Intent.EXTRA_STREAM, getIntent().getData());
+		shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		
+		try {
+			startActivity(Intent.createChooser(shareIntent, getString(R.string.share_document)));
+		} catch (android.content.ActivityNotFoundException e) {
+			Toast.makeText(this, getString(R.string.toast_no_apps_to_share), Toast.LENGTH_SHORT).show();
+		}
 	}
 
 	public void toggleUI() {
