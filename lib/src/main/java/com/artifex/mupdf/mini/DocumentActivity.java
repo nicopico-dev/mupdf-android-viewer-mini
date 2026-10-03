@@ -4,6 +4,7 @@ import com.artifex.mupdf.fitz.*;
 import com.artifex.mupdf.fitz.android.*;
 
 import android.Manifest;
+import android.app.ActionBar;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ContentResolver;
@@ -91,7 +92,7 @@ public class DocumentActivity extends Activity
 	protected TextView titleLabel;
 	protected View bottomBar;
 	protected View backgroundLayout;
-	protected View topBar;
+	protected ActionBar actionBar;
 	protected TextView pageLabel;
 	protected SeekBar pageSeekbar;
 	private Menu actionBarMenu;
@@ -171,10 +172,28 @@ public class DocumentActivity extends Activity
 		setContentView(R.layout.document_activity);
 		bottomBar = findViewById(R.id.bottom_bar);
 		backgroundLayout = findViewById(R.id.background_layout);
-		topBar = findViewById(R.id.top_bar);
+		actionBar = getActionBar();
 
-		getActionBar().setDisplayHomeAsUpEnabled(false);
-		getActionBar().setTitle(title);
+		// Enable edge-to-edge mode with ActionBar
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			getWindow().setDecorFitsSystemWindows(false);
+		} else {
+			getWindow().getDecorView().setSystemUiVisibility(
+				View.SYSTEM_UI_FLAG_LAYOUT_STABLE | 
+				View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | 
+				View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+			);
+		}
+
+		// Set up window insets listener for edge-to-edge
+		backgroundLayout.setOnApplyWindowInsetsListener((v, insets) -> {
+			applyInsets(insets);
+			return insets;
+		});
+
+		actionBar.hide();
+		actionBar.setDisplayHomeAsUpEnabled(false);
+		actionBar.setTitle(title);
 
 		Uri uri = getIntent().getData();
 		mimetype = getIntent().getType();
@@ -272,14 +291,6 @@ public class DocumentActivity extends Activity
 			}
 		});
 
-		topBar.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-				public WindowInsets onApplyWindowInsets(View v, WindowInsets windowInsets)
-				{
-					applyInsets(windowInsets);
-					return WindowInsets.CONSUMED;
-				}
-		});
-
 		if (Build.VERSION.SDK_INT >= 29)
 			bottomBar.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
 				public void onLayoutChange(View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
@@ -327,7 +338,6 @@ public class DocumentActivity extends Activity
 		systemInsets = Insets.max(systemInsets, systemBarInsets);
 		Insets cutoutInsets = windowInsets.getInsets(WindowInsets.Type.displayCutout());
 		systemInsets = Insets.max(systemInsets, cutoutInsets);
-		topBar.setPadding(0, systemInsets.top, 0, 0);
 		bottomBar.setPadding(0, 0, 0, systemInsets.bottom);
 	}
 
@@ -698,7 +708,7 @@ public class DocumentActivity extends Activity
 				pageCountChanged = true;
 				if (currentPage < 0 || currentPage >= pageCount)
 					currentPage = 0;
-				getActionBar().setTitle(title);
+				actionBar.setTitle(title);
 				if (actionBarMenu != null) {
 					actionBarMenu.findItem(R.id.action_layout).setVisible(isReflowable);
 					actionBarMenu.findItem(R.id.action_zoom).setVisible(!isReflowable);
@@ -869,14 +879,14 @@ public class DocumentActivity extends Activity
 	public void toggleUI() {
 		toggledUI = true;
 		if (bottomBar.getVisibility() == View.VISIBLE) {
-			topBar.setVisibility(View.GONE);
+			actionBar.hide();
 			bottomBar.setVisibility(View.GONE);
 			// Collapse SearchView if expanded
 			if (searchMenuItem != null && searchMenuItem.isActionViewExpanded()) {
 				searchMenuItem.collapseActionView();
 			}
 		} else {
-			topBar.setVisibility(View.VISIBLE);
+			actionBar.show();
 			bottomBar.setVisibility(View.VISIBLE);
 			showPageNumber(currentPage + 1);
 		}
