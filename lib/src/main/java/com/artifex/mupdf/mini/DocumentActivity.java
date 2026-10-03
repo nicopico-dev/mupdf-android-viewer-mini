@@ -39,6 +39,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.PopupMenu;
+import android.widget.SearchView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -88,17 +89,16 @@ public class DocumentActivity extends Activity
 	protected View currentBar;
 	protected PageView pageView;
 	protected TextView titleLabel;
-	protected View searchBar;
-	protected EditText searchText;
-	protected View searchCloseButton;
-	protected View searchBackwardButton;
-	protected View searchForwardButton;
 	protected View bottomBar;
 	protected View backgroundLayout;
 	protected View topBar;
 	protected TextView pageLabel;
 	protected SeekBar pageSeekbar;
 	private Menu actionBarMenu;
+	private SearchView searchView;
+	private MenuItem searchMenuItem;
+	private MenuItem searchPreviousMenuItem;
+	private MenuItem searchNextMenuItem;
 
 	protected boolean pageCountChanged;
 	protected int pageCount;
@@ -169,7 +169,6 @@ public class DocumentActivity extends Activity
 		displayDPI = metrics.densityDpi;
 
 		setContentView(R.layout.document_activity);
-		searchBar = findViewById(R.id.search_bar);
 		bottomBar = findViewById(R.id.bottom_bar);
 		backgroundLayout = findViewById(R.id.background_layout);
 		topBar = findViewById(R.id.top_bar);
@@ -273,46 +272,6 @@ public class DocumentActivity extends Activity
 			}
 		});
 
-		searchText = (EditText)findViewById(R.id.search_text);
-		searchText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-			public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-				if (actionId == EditorInfo.IME_NULL && event.getAction() == KeyEvent.ACTION_DOWN) {
-					search(1);
-					return true;
-				}
-				if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-					search(1);
-					return true;
-				}
-				return false;
-			}
-		});
-		searchText.addTextChangedListener(new TextWatcher() {
-			public void afterTextChanged(Editable s) {}
-			public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-			public void onTextChanged(CharSequence s, int start, int before, int count) {
-				resetSearch();
-			}
-		});
-		searchCloseButton = findViewById(R.id.search_close_button);
-		searchCloseButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				hideSearch();
-			}
-		});
-		searchBackwardButton = findViewById(R.id.search_backward_button);
-		searchBackwardButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				search(-1);
-			}
-		});
-		searchForwardButton = findViewById(R.id.search_forward_button);
-		searchForwardButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				search(1);
-			}
-		});
-
 		topBar.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
 				public WindowInsets onApplyWindowInsets(View v, WindowInsets windowInsets)
 				{
@@ -376,6 +335,58 @@ public class DocumentActivity extends Activity
 	public boolean onCreateOptionsMenu(Menu menu) {
 		getMenuInflater().inflate(R.menu.action_bar_menu, menu);
 		actionBarMenu = menu;
+
+		// Configure SearchView
+		searchMenuItem = menu.findItem(R.id.action_search);
+		searchView = (SearchView) searchMenuItem.getActionView();
+
+		// Configure search navigation buttons
+		searchPreviousMenuItem = menu.findItem(R.id.action_search_previous);
+		searchNextMenuItem = menu.findItem(R.id.action_search_next);
+		if (searchPreviousMenuItem != null) searchPreviousMenuItem.setVisible(false);
+		if (searchNextMenuItem != null) searchNextMenuItem.setVisible(false);
+
+		// Set query hint
+		searchView.setQueryHint(getString(R.string.text_search_hint));
+
+		// Set IME options to ensure search action is available
+		searchView.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+		searchView.setInputType(EditorInfo.TYPE_TEXT_VARIATION_NORMAL | EditorInfo.TYPE_CLASS_TEXT);
+
+		// Set up search text listener
+		searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+			@Override
+			public boolean onQueryTextSubmit(String query) {
+				search(1);  // Search forward on submit
+				showSearchNavigationButtons(true);
+				return true;
+			}
+
+			@Override
+			public boolean onQueryTextChange(String newText) {
+				if (newText.isEmpty()) {
+					stopSearch = true;
+					searchHitPage = -1;
+					searchNeedle = null;
+					pageView.resetHits();
+					showSearchNavigationButtons(false);
+				}
+				return true;
+			}
+		});
+
+		// Handle search close
+		searchView.setOnCloseListener(new SearchView.OnCloseListener() {
+			@Override
+			public boolean onClose() {
+				hideSearch();
+				return false;  // Allow default close behavior
+			}
+		});
+
+		// Enable SearchView's built-in navigation buttons
+		searchView.setIconifiedByDefault(false);
+
 		return true;
 	}
 
@@ -383,7 +394,13 @@ public class DocumentActivity extends Activity
 	public boolean onOptionsItemSelected(MenuItem item) {
 		int id = item.getItemId();
 		if (id == R.id.action_search) {
-			showSearch();
+			searchMenuItem.expandActionView();
+			return true;
+		} else if (id == R.id.action_search_previous) {
+			if (searchNeedle != null) search(-1);
+			return true;
+		} else if (id == R.id.action_search_next) {
+			if (searchNeedle != null) search(1);
 			return true;
 		} else if (id == R.id.action_share) {
 			shareDocument();
@@ -572,13 +589,13 @@ public class DocumentActivity extends Activity
 	protected void showKeyboard() {
 		InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
 		if (imm != null)
-			imm.showSoftInput(searchText, 0);
+			imm.showSoftInput(searchView, 0);
 	}
 
 	protected void hideKeyboard() {
 		InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
 		if (imm != null)
-			imm.hideSoftInputFromWindow(searchText.getWindowToken(), 0);
+			imm.hideSoftInputFromWindow(searchView.getWindowToken(), 0);
 	}
 
 	protected void resetSearch() {
@@ -586,6 +603,12 @@ public class DocumentActivity extends Activity
 		searchHitPage = -1;
 		searchNeedle = null;
 		pageView.resetHits();
+		showSearchNavigationButtons(false);
+	}
+
+	private void showSearchNavigationButtons(boolean show) {
+		if (searchPreviousMenuItem != null) searchPreviousMenuItem.setVisible(show);
+		if (searchNextMenuItem != null) searchNextMenuItem.setVisible(show);
 	}
 
 	protected void runSearch(final int startPage, final int direction, final String needle) {
@@ -598,7 +621,7 @@ public class DocumentActivity extends Activity
 				for (int i = 0; i < 9; ++i) {
 					Log.i(APP, "search page " + searchPage);
 					Page page = doc.loadPage(searchPage);
-					Quad[][] hits = page.search(searchNeedle);
+					Quad[][] hits = page.search(needle);
 					page.destroy();
 					if (hits != null && hits.length > 0) {
 						newSearchHitPage = true;
@@ -634,14 +657,13 @@ public class DocumentActivity extends Activity
 	}
 
 	protected void search(int direction) {
-		hideKeyboard();
 		int startPage;
 		if (searchHitPage == currentPage)
 			startPage = currentPage + direction;
 		else
 			startPage = currentPage;
 		searchHitPage = -1;
-		searchNeedle = searchText.getText().toString();
+		searchNeedle = searchView.getQuery().toString();
 		if (searchNeedle.length() == 0)
 			searchNeedle = null;
 		if (searchNeedle != null)
@@ -817,17 +839,18 @@ public class DocumentActivity extends Activity
 	}
 
 	protected void showSearch() {
-		getActionBar().hide();
-		searchBar.setVisibility(View.VISIBLE);
-		searchBar.requestFocus();
-		showKeyboard();
+		searchMenuItem.expandActionView();
+		searchView.setQuery("", false);
+		searchView.requestFocus();
+		// Show SearchView's built-in navigation buttons
+		searchView.setIconified(false);
 	}
 
 	protected void hideSearch() {
-		getActionBar().show();
-		searchBar.setVisibility(View.GONE);
-		hideKeyboard();
+		searchMenuItem.collapseActionView();
+		searchView.setQuery("", false);
 		resetSearch();
+		showSearchNavigationButtons(false);
 	}
 
 	protected void shareDocument() {
@@ -847,19 +870,15 @@ public class DocumentActivity extends Activity
 		toggledUI = true;
 		if (bottomBar.getVisibility() == View.VISIBLE) {
 			topBar.setVisibility(View.GONE);
-			currentBar.setVisibility(View.GONE);
 			bottomBar.setVisibility(View.GONE);
-			if (currentBar == searchBar)
-				hideKeyboard();
+			// Collapse SearchView if expanded
+			if (searchMenuItem != null && searchMenuItem.isActionViewExpanded()) {
+				searchMenuItem.collapseActionView();
+			}
 		} else {
 			topBar.setVisibility(View.VISIBLE);
-			currentBar.setVisibility(View.VISIBLE);
 			bottomBar.setVisibility(View.VISIBLE);
 			showPageNumber(currentPage + 1);
-			if (currentBar == searchBar) {
-				searchBar.requestFocus();
-				showKeyboard();
-			}
 		}
 	}
 
