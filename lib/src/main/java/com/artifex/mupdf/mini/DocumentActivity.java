@@ -29,6 +29,7 @@ import android.text.method.PasswordTransformationMethod;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.Window;
@@ -86,24 +87,18 @@ public class DocumentActivity extends Activity
 
 	protected View currentBar;
 	protected PageView pageView;
-	protected View actionBar;
 	protected TextView titleLabel;
-	protected View searchButton;
-	protected View shareButton;
 	protected View searchBar;
 	protected EditText searchText;
 	protected View searchCloseButton;
 	protected View searchBackwardButton;
 	protected View searchForwardButton;
-	protected View zoomButton;
-	protected View layoutButton;
-	protected PopupMenu layoutPopupMenu;
-	protected View outlineButton;
 	protected View bottomBar;
 	protected View backgroundLayout;
 	protected View topBar;
 	protected TextView pageLabel;
 	protected SeekBar pageSeekbar;
+	private Menu actionBarMenu;
 
 	protected boolean pageCountChanged;
 	protected int pageCount;
@@ -168,21 +163,19 @@ public class DocumentActivity extends Activity
 
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
 		DisplayMetrics metrics = new DisplayMetrics();
 		getWindowManager().getDefaultDisplay().getMetrics(metrics);
 		displayDPI = metrics.densityDpi;
 
 		setContentView(R.layout.document_activity);
-		actionBar = findViewById(R.id.action_bar);
 		searchBar = findViewById(R.id.search_bar);
 		bottomBar = findViewById(R.id.bottom_bar);
 		backgroundLayout = findViewById(R.id.background_layout);
 		topBar = findViewById(R.id.top_bar);
 
-		currentBar = actionBar;
+		getActionBar().setDisplayHomeAsUpEnabled(false);
+		getActionBar().setTitle(title);
 
 		Uri uri = getIntent().getData();
 		mimetype = getIntent().getType();
@@ -249,9 +242,6 @@ public class DocumentActivity extends Activity
 			Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
 		}
 
-		titleLabel = (TextView)findViewById(R.id.title_label);
-		titleLabel.setText(title);
-
 		history = new Stack<Integer>();
 
 		worker = new Worker(this);
@@ -283,19 +273,6 @@ public class DocumentActivity extends Activity
 			}
 		});
 
-		searchButton = findViewById(R.id.search_button);
-		searchButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				showSearch();
-			}
-		});
-
-		shareButton = findViewById(R.id.share_button);
-		shareButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				shareDocument();
-			}
-		});
 		searchText = (EditText)findViewById(R.id.search_text);
 		searchText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
 			public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
@@ -333,55 +310,6 @@ public class DocumentActivity extends Activity
 		searchForwardButton.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View v) {
 				search(1);
-			}
-		});
-
-		outlineButton = findViewById(R.id.outline_button);
-		outlineButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				Intent intent = new Intent(DocumentActivity.this, OutlineActivity.class);
-				Bundle bundle = new Bundle();
-				bundle.putInt("POSITION", currentPage);
-				bundle.putSerializable("OUTLINE", flatOutline);
-				intent.putExtras(bundle);
-				startActivityForResult(intent, NAVIGATE_REQUEST);
-			}
-		});
-
-		zoomButton = findViewById(R.id.zoom_button);
-		zoomButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				fitPage = !fitPage;
-				loadPage();
-			}
-		});
-
-		layoutButton = findViewById(R.id.layout_button);
-		layoutPopupMenu = new PopupMenu(this, layoutButton);
-		layoutPopupMenu.getMenuInflater().inflate(R.menu.layout_menu, layoutPopupMenu.getMenu());
-		layoutPopupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-			public boolean onMenuItemClick(MenuItem item) {
-				float oldLayoutEm = layoutEm;
-				int id = item.getItemId();
-				if (id == R.id.action_layout_6pt) layoutEm = 6;
-				else if (id == R.id.action_layout_7pt) layoutEm = 7;
-				else if (id == R.id.action_layout_8pt) layoutEm = 8;
-				else if (id == R.id.action_layout_9pt) layoutEm = 9;
-				else if (id == R.id.action_layout_10pt) layoutEm = 10;
-				else if (id == R.id.action_layout_11pt) layoutEm = 11;
-				else if (id == R.id.action_layout_12pt) layoutEm = 12;
-				else if (id == R.id.action_layout_13pt) layoutEm = 13;
-				else if (id == R.id.action_layout_14pt) layoutEm = 14;
-				else if (id == R.id.action_layout_15pt) layoutEm = 15;
-				else if (id == R.id.action_layout_16pt) layoutEm = 16;
-				if (oldLayoutEm != layoutEm)
-					relayoutDocument();
-				return true;
-			}
-		});
-		layoutButton.setOnClickListener(new View.OnClickListener() {
-			public void onClick(View v) {
-				layoutPopupMenu.show();
 			}
 		});
 
@@ -442,6 +370,63 @@ public class DocumentActivity extends Activity
 		systemInsets = Insets.max(systemInsets, cutoutInsets);
 		topBar.setPadding(0, systemInsets.top, 0, 0);
 		bottomBar.setPadding(0, 0, 0, systemInsets.bottom);
+	}
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		getMenuInflater().inflate(R.menu.action_bar_menu, menu);
+		actionBarMenu = menu;
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		int id = item.getItemId();
+		if (id == R.id.action_search) {
+			showSearch();
+			return true;
+		} else if (id == R.id.action_share) {
+			shareDocument();
+			return true;
+		} else if (id == R.id.action_zoom) {
+			fitPage = !fitPage;
+			loadPage();
+			return true;
+		} else if (id == R.id.action_layout) {
+			PopupMenu popup = new PopupMenu(this, findViewById(R.id.action_layout));
+			popup.getMenuInflater().inflate(R.menu.layout_menu, popup.getMenu());
+			popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+				public boolean onMenuItemClick(MenuItem item) {
+					float oldLayoutEm = layoutEm;
+					int id = item.getItemId();
+					if (id == R.id.action_layout_6pt) layoutEm = 6;
+					else if (id == R.id.action_layout_7pt) layoutEm = 7;
+					else if (id == R.id.action_layout_8pt) layoutEm = 8;
+					else if (id == R.id.action_layout_9pt) layoutEm = 9;
+					else if (id == R.id.action_layout_10pt) layoutEm = 10;
+					else if (id == R.id.action_layout_11pt) layoutEm = 11;
+					else if (id == R.id.action_layout_12pt) layoutEm = 12;
+					else if (id == R.id.action_layout_13pt) layoutEm = 13;
+					else if (id == R.id.action_layout_14pt) layoutEm = 14;
+					else if (id == R.id.action_layout_15pt) layoutEm = 15;
+					else if (id == R.id.action_layout_16pt) layoutEm = 16;
+					if (oldLayoutEm != layoutEm)
+						relayoutDocument();
+					return true;
+				}
+			});
+			popup.show();
+			return true;
+		} else if (id == R.id.action_outline) {
+			Intent intent = new Intent(DocumentActivity.this, OutlineActivity.class);
+			Bundle bundle = new Bundle();
+			bundle.putInt("POSITION", currentPage);
+			bundle.putSerializable("OUTLINE", flatOutline);
+			intent.putExtras(bundle);
+			startActivityForResult(intent, NAVIGATE_REQUEST);
+			return true;
+		}
+		return super.onOptionsItemSelected(item);
 	}
 
 	public boolean onKeyUp(int keyCode, KeyEvent event) {
@@ -691,11 +676,11 @@ public class DocumentActivity extends Activity
 				pageCountChanged = true;
 				if (currentPage < 0 || currentPage >= pageCount)
 					currentPage = 0;
-				titleLabel.setText(title);
-				if (isReflowable)
-					layoutButton.setVisibility(View.VISIBLE);
-				else
-					zoomButton.setVisibility(View.VISIBLE);
+				getActionBar().setTitle(title);
+				if (actionBarMenu != null) {
+					actionBarMenu.findItem(R.id.action_layout).setVisible(isReflowable);
+					actionBarMenu.findItem(R.id.action_zoom).setVisible(!isReflowable);
+				}
 				loadPage();
 				loadOutline();
 			}
@@ -759,8 +744,8 @@ public class DocumentActivity extends Activity
 				}
 			}
 			public void run() {
-				if (flatOutline != null)
-					outlineButton.setVisibility(View.VISIBLE);
+				if (flatOutline != null && actionBarMenu != null)
+					actionBarMenu.findItem(R.id.action_outline).setVisible(true);
 				if (outlineTruncated)
 					Toast.makeText(DocumentActivity.this, getString(R.string.toast_outline_too_large), Toast.LENGTH_SHORT).show();
 			}
@@ -832,16 +817,14 @@ public class DocumentActivity extends Activity
 	}
 
 	protected void showSearch() {
-		currentBar = searchBar;
-		actionBar.setVisibility(View.GONE);
+		getActionBar().hide();
 		searchBar.setVisibility(View.VISIBLE);
 		searchBar.requestFocus();
 		showKeyboard();
 	}
 
 	protected void hideSearch() {
-		currentBar = actionBar;
-		actionBar.setVisibility(View.VISIBLE);
+		getActionBar().show();
 		searchBar.setVisibility(View.GONE);
 		hideKeyboard();
 		resetSearch();
