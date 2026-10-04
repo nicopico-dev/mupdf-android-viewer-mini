@@ -10,6 +10,7 @@ import android.app.AlertDialog;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -866,7 +867,12 @@ public class DocumentActivity extends Activity
 	protected void shareDocument() {
 		Intent shareIntent = new Intent(Intent.ACTION_SEND);
 		shareIntent.setType(mimetype);
-		shareIntent.putExtra(Intent.EXTRA_STREAM, getIntent().getData());
+		Uri uri = getIntent().getData();
+		ClipData.Item item = new ClipData.Item(uri);
+		ClipData clip = new ClipData(title != null ? title : "", new String[]{mimetype}, item);
+		shareIntent.setClipData(clip);
+		shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+		shareIntent.putExtra(Intent.EXTRA_SUBJECT, title);
 		shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 		
 		try {
